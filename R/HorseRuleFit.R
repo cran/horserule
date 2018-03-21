@@ -2,8 +2,6 @@
 #'
 #' Fits the Horseshoe Rulefit model described in
 #' \insertRef{cite1}{horserule} (https://arxiv.org/abs/1702.05008)
-#' @param model.formula formula type argument specifying the linear model. All standard lm arguments can be passed over, such as interactions and cubic terms.
-#' @param data If model.forumla is used data must be the data frame containing the variables.
 #' @param X A matrix or dataframe containing the predictor variables to be used.
 #' @param y A vector containing the response variables. If numeric regression is performed and classification otherwise.
 #' @param Xtest optional matrix or dataframe containing predictor variables of test set.
@@ -27,9 +25,9 @@
 #' @param ytransform Choose "log" for logarithmic transform of y.
 #' @return An object of class HorseRuleFit, which is a list of the following components:
 ##'  \item{bhat}{Posterior mean of the regression coefficients.}
-##'  \item{posteriorsamples}{List contraining the Posterior samples of the regression coefficients, error variance sigma and shrinkage tau.}
+##'  \item{postdraws}{List contraining the Posterior samples of the regression coefficients, error variance sigma and shrinkage tau.}
 ##'  \item{rules}{Vector containing the decision rules.}
-##'  \item{Xt}{Matrix of train data with rules as dummies.}
+##'  \item{df}{Matrix containing original training data and the decision rule covariates (normalized).}
 ##'  \item{y}{Response in train data.}
 ##'  \item{prior}{Vector rule structure prior for the individual rules.}
 ##'  \item{modelstuff}{List contraining the parameters used and values used for the normalization (means and sds).}
@@ -70,35 +68,11 @@
 #' @export
 #' @import stats
 #' @import utils
-HorseRuleFit = function(model.formula=NULL,data=NULL,X=NULL, y=NULL, Xtest=NULL, ytest=NULL,
+HorseRuleFit = function(X=NULL, y=NULL, Xtest=NULL, ytest=NULL,
                         niter=1000,burnin=100, thin=1, restricted=0.001, shrink.prior ="HS",
                         beta=2, alpha=1, linp=1,
                         ensemble= "RF", L=4, S=6, ntree=250, minsup=.025, mix=0.5,
                         linterms=NULL, intercept=F, ytransform = "linear") {
-  sdy=1
-  muy=0
-  inputtype = "matrix-type"
-  terms_test = NULL
-  terms_train = NULL
-  if(is.null(model.formula)==F){
-    if(is.null(data)){
-      stop("If formula type argument is used, the argument 'data' needs to be specified.")
-    } else{
-      inputtype = "formula-type"
-      yname = as.character(attr(terms(model.formula,data=data), "variables")[[attr(terms(medv~.,data=data), "response")+1]])
-      terms_test = delete.response(terms(model.formula, data=data))
-      attr(terms_test,"intercept") = 0
-      if(is.null(yname)==F){
-        eval(parse( text = (paste("y <- data$",yname, sep=""))))
-        terms_train = terms(model.formula, data=data)
-        attr(terms_train,"intercept") = 0
-        X = model.matrix(terms_train, data=data)
-      } else {
-        stop("Error in the given formula, response not found in dataframe.")
-      }
-
-    }
-  }
 
   if((is.matrix(X)|is.data.frame(X))==F){
     stop("X must be a matrix or data frame")
@@ -159,20 +133,20 @@ HorseRuleFit = function(model.formula=NULL,data=NULL,X=NULL, y=NULL, Xtest=NULL,
   if(ytransform == "log") {
     y = log(y)
     if(any(is.na(y))){
-      stop("logarithmic transform produced NAs. Please consider adding a small amount to the y before rerunning.")
+      stop("logarithmic transform produced NAs. Please consider adding a small number to y before transforming.")
     }
   }
-  muy = 0
 
-  if(is.numeric(y)){
-    if(mean(y) != 0) {
-      muy = mean(y)
-      sdy = sd(y)
-      yz = (y-muy)/sdy
-    }
+
+  if(mean(y) != 0 | sd(y) !=1){
+    muy = mean(y)
+    sdy = sd(y)
+    yz = (y-muy)/sdy
   } else {
-    yz = y
+    muy = 0
+    sdy = 1
   }
+
 
   N = length(y)
   if (ensemble == "RF") {
@@ -185,7 +159,6 @@ HorseRuleFit = function(model.formula=NULL,data=NULL,X=NULL, y=NULL, Xtest=NULL,
     rulesf = c(rules1, rules2)
   } else {
     print("invalid Tree ensemble choice")
-    break
   }
 
   dt = createX(X= X, rules = rulesf, t = minsup)
@@ -238,33 +211,24 @@ HorseRuleFit = function(model.formula=NULL,data=NULL,X=NULL, y=NULL, Xtest=NULL,
   }
 
   if (shrink.prior == "HS") {
-    if(is.numeric(y)){
+
       hsmodel = hs(X = Xt, y=yz, niter=niter, prior=prior,thin=thin, hsplus=F, restricted=restricted)
       beta = sdy*hsmodel[[1]][-c(1:(burnin/thin)),]
       bhat = apply(beta, 2, mean)
-    } else {
-      hsmodel = hs_class(X = Xt, y=yz, niter=niter, prior=prior,thin=thin, hsplus=F, restricted=restricted)
-      beta = sdy*hsmodel[[1]][-c(1:(burnin/thin)),]
-      bhat = apply(beta, 2, mean)
-    }
+
   } else if (shrink.prior =="HS+") {
-    if(is.numeric(y)){
+
       hsmodel = hs(X = Xt, y=yz, niter=niter, prior=prior,thin=thin, hsplus=T, restricted=restricted)
       beta = sdy*hsmodel[[1]][-c(1:(burnin/thin)),]
       bhat = apply(beta, 2, mean)
-    } else {
-      hsmodel = hs_class(X = Xt, y=yz, niter=niter, prior=prior,thin=thin, hsplus=T, restricted=restricted)
-      beta = sdy*hsmodel[[1]][-c(1:(burnin/thin)),]
-      bhat = apply(beta, 2, mean)
-    }
+
   } else {
     print("invalid prior choice")
-    break
   }
 
 
   if(is.null(Xtest)==T){
-    out = list(postmean=bhat,postdraws=list(beta=hsmodel[[1]], sigma=hsmodel[[2]], tau=hsmodel[[3]]), rules=rulesFin, df=Xt, y=y, prior=prior, modelstuff=list(linterms=linterms, sdr=sdr, mur=mur, sdl=sdl, mul=mul, ytransform=ytransform, muy=muy,sdy =sdy,sdl=sdl, intercept=intercept, inputtype=inputtype, model.formula = model.formula, terms_test = terms_test), X=X)
+    out = list(bhat=bhat,postdraws=list(beta=hsmodel[[1]], sigma=hsmodel[[2]], tau=hsmodel[[3]]), rules=rulesFin, df=Xt, y=y, prior=prior, modelstuff=list(linterms=linterms, sdr=sdr, mur=mur, sdl=sdl, mul=mul, ytransform=ytransform, muy=muy,sdy =sdy,sdl=sdl, intercept=intercept), X=X)
     class(out) = "HorseRulemodel"
   } else {
     ##create rules. Standardize.
@@ -300,15 +264,11 @@ HorseRuleFit = function(model.formula=NULL,data=NULL,X=NULL, y=NULL, Xtest=NULL,
       predDist = apply(beta, 1, function(x)exp(as.matrix(X_test)%*%(x) + muy))
       pred = apply(predDist, 1, mean)
       er = sqrt(mean((pred-ytest)^2))
-    } else if(is.numeric(y)) {
+    } else {
       pred = ((as.matrix(X_test)%*%(bhat)) + muy)
       er = sqrt(mean((pred-ytest)^2))
-    } else {
-      predDist = apply(beta, 1, function(x)1/(1+exp(-(as.matrix(X_test)%*%(x)))))
-      pred = apply(predDist, 1, mean)
-      er = 1-mean(ifelse(pred<0.5, 0, 1)==(as.numeric(ytest)-1))
     }
-    out = list(postmean=bhat,postdraws=list(beta=hsmodel[[1]], sigma=hsmodel[[2]], tau=hsmodel[[3]]), rules=rulesFin, df=Xt, y=y, prior=prior, modelstuff=list(linterms=linterms, sdr=sdr, mur=mur, sdl=sdl, mul=mul, ytransform=ytransform, muy=muy,sdy=sdy, intercept=intercept, inputtype=inputtype, model.formula = model.formula, terms_test = terms_test), pred=pred, error=er, X=X)
+    out = list(bhat=bhat,postdraws=list(beta=hsmodel[[1]], sigma=hsmodel[[2]], tau=hsmodel[[3]]), rules=rulesFin, df=Xt, y=y, prior=prior, modelstuff=list(linterms=linterms, sdr=sdr, mur=mur, sdl=sdl, mul=mul, ytransform=ytransform, muy=muy,sdy=sdy, intercept=intercept), pred=pred, error=er, X=X)
     class(out) = "HorseRulemodel"
   }
   out

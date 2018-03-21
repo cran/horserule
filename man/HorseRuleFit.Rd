@@ -4,18 +4,13 @@
 \alias{HorseRuleFit}
 \title{Horseshoe RuleFit}
 \usage{
-HorseRuleFit(model.formula = NULL, data = NULL, X = NULL, y = NULL,
-  Xtest = NULL, ytest = NULL, niter = 1000, burnin = 100, thin = 1,
-  restricted = 0.001, shrink.prior = "HS", beta = 2, alpha = 1,
-  linp = 1, ensemble = "RF", L = 4, S = 6, ntree = 250,
-  minsup = 0.025, mix = 0.5, linterms = NULL, intercept = F,
-  ytransform = "linear")
+HorseRuleFit(X = NULL, y = NULL, Xtest = NULL, ytest = NULL,
+  niter = 1000, burnin = 100, thin = 1, restricted = 0.001,
+  shrink.prior = "HS", beta = 2, alpha = 1, linp = 1, ensemble = "RF",
+  L = 4, S = 6, ntree = 250, minsup = 0.025, mix = 0.5,
+  linterms = NULL, intercept = F, ytransform = "linear")
 }
 \arguments{
-\item{model.formula}{formula type argument specifying the linear model. All standard lm arguments can be passed over, such as interactions and cubic terms.}
-
-\item{data}{If model.forumla is used data must be the data frame containing the variables.}
-
 \item{X}{A matrix or dataframe containing the predictor variables to be used.}
 
 \item{y}{A vector containing the response variables. If numeric regression is performed and classification otherwise.}
@@ -61,9 +56,9 @@ HorseRuleFit(model.formula = NULL, data = NULL, X = NULL, y = NULL,
 \value{
 An object of class HorseRuleFit, which is a list of the following components:
  \item{bhat}{Posterior mean of the regression coefficients.}
- \item{posteriorsamples}{List contraining the Posterior samples of the regression coefficients, error variance sigma and shrinkage tau.}
+ \item{postdraws}{List contraining the Posterior samples of the regression coefficients, error variance sigma and shrinkage tau.}
  \item{rules}{Vector containing the decision rules.}
- \item{Xt}{Matrix of train data with rules as dummies.}
+ \item{df}{Matrix containing original training data and the decision rule covariates (normalized).}
  \item{y}{Response in train data.}
  \item{prior}{Vector rule structure prior for the individual rules.}
  \item{modelstuff}{List contraining the parameters used and values used for the normalization (means and sds).}

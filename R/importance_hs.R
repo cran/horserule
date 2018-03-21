@@ -39,7 +39,7 @@ importance_hs = function(model, k=10){
   rules = model$rules
   lin = (model$modelstuff)$linterms
   beta = (model$postdraws)$beta*sdy
-  bhat = model$postmean*sdy
+  bhat = model$bhat*sdy
   imp_post_mean = abs(bhat)
   nmost = k
   inds = order(imp_post_mean, decreasing = T)[1:nmost]
